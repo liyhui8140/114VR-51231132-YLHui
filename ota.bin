@@ -1,24 +1,24 @@
 #include <WiFi.h>
+#include <WiFiClientSecure.h>
 #include <PubSubClient.h>
 #include <HTTPClient.h>
 #include <Update.h>
 
-// ==================== WiFi 與 MQTT 設定 ====================
+// ------------------ WiFi & MQTT 設定 ------------------
 const char* ssid = "hel";
-const char* password = "123456890";
-const char* mqtt_server = "120.102.36.38"; // 可換成你的MQTT roker
-const char* ota_url = "https://raw.githubusercontent.com/liyhui8140/114VR-51231132-YLHui/main/ota.bin"; // OTA 檔案路徑
+const char* password = "1234567890";
+const char* mqtt_server = "120.102.36.38";
+const char* ota_url = "https://raw.githubusercontent.com/liyhui8140/114VR-51231132-YLHui/main/ota.bin";
 const char* client_id = "ESP32_OTA_Client";
 
-// ==================== MQTT 與網路 ====================
-WiFiClientSecure httpsClient;
-PubSubClient client(httpsClient);
+WiFiClientSecure wifiClient;       // <-- 改成 WiFiClientSecure
+PubSubClient client(wifiClient);
 
-// ==================== 發送版本代號 ====================
-#define CURRENT_VERSION "v1"   // ⚠️ 版本標識 (v1/v2/v3...)，更新時改這裡
-#define SEND_NUMBER "1"        // ⚠️ 每個版本送不同數字以辨識更新成功
+// ------------------ 韌體版本 ------------------
+#define CURRENT_VERSION "v1"
+#define SEND_NUMBER "1"
 
-// ==================== 函數定義 ====================
+// ------------------ 函式 ------------------
 void setup_wifi() {
   Serial.print("連線中至 WiFi: ");
   WiFi.begin(ssid, password);
@@ -31,16 +31,18 @@ void setup_wifi() {
   Serial.println(WiFi.localIP());
 }
 
-// OTA 更新函式
 void performOTA() {
   Serial.println("\n--- 開始 OTA 更新 ---");
+  
+  wifiClient.setInsecure(); // 忽略 GitHub SSL 憑證，測試用
+
   HTTPClient http;
-  http.begin(httpsClient, ota_url);
+  http.begin(wifiClient, ota_url);
   int httpCode = http.GET();
 
   if (httpCode == HTTP_CODE_OK) {
     int contentLength = http.getSize();
-    WiFiClient *stream = http.getStreamPtr();
+    WiFiClient* stream = http.getStreamPtr();
 
     if (Update.begin(contentLength)) {
       size_t written = Update.writeStream(*stream);
@@ -54,7 +56,7 @@ void performOTA() {
           Serial.printf("❌ OTA 結束失敗: %s\n", Update.errorString());
         }
       } else {
-        Serial.printf("❌ 寫入不完整 (%d / %d)\n", written, contentLength);
+        Serial.printf("❌ 寫入不完整 (%d/%d)\n", written, contentLength);
         Update.end();
       }
     } else {
@@ -63,30 +65,26 @@ void performOTA() {
   } else {
     Serial.printf("❌ HTTP 錯誤: %d\n", httpCode);
   }
-
   http.end();
 }
 
-// MQTT 訊息回調
 void callback(char* topic, byte* payload, unsigned int length) {
   String msg;
   for (int i = 0; i < length; i++) msg += (char)payload[i];
   msg.trim();
-
   Serial.printf("收到 [%s]: %s\n", topic, msg.c_str());
   if (msg.equalsIgnoreCase("update")) {
     performOTA();
   }
 }
 
-// MQTT 重新連線
 void reconnect() {
   while (!client.connected()) {
     Serial.print("嘗試連線 MQTT...");
     if (client.connect(client_id)) {
       Serial.println("成功");
       client.subscribe("esp32/update");
-      client.publish("esp32/status", "ESP32 連線成功並可接收 update 指令");
+      client.publish("esp32/status", "ESP32 已上線，等待 update 指令");
     } else {
       Serial.printf("失敗, 錯誤代碼: %d, 重試中...\n", client.state());
       delay(2000);
@@ -94,12 +92,11 @@ void reconnect() {
   }
 }
 
-// ==================== 主程式 ====================
+// ------------------ 主程式 ------------------
 void setup() {
   Serial.begin(115200);
   setup_wifi();
-  httpsClient.setInsecure(); // 測試階段不驗證 SSL 憑證
-  client.setServer(mqtt_server, 5007); // 使用 SSL MQTT port
+  client.setServer(mqtt_server, 5007);
   client.setCallback(callback);
 }
 
@@ -107,7 +104,7 @@ void loop() {
   if (!client.connected()) reconnect();
   client.loop();
 
-  client.publish("esp32/test", SEND_NUMBER); // 每3秒發送版本識別碼
+  client.publish("esp32/test", SEND_NUMBER);
   Serial.printf("版本 %s 發送: %s\n", CURRENT_VERSION, SEND_NUMBER);
   delay(3000);
 }
