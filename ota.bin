@@ -6,8 +6,8 @@
 // ==================== WiFi 與 MQTT 設定 ====================
 const char* ssid = "hel";
 const char* password = "123456890";
-const char* mqtt_server = "120.102.36.38"; // 可換成你的MQTT Broker
-const char* ota_url = "https://yourdomain.com/firmware/latest.bin"; // OTA 檔案路徑
+const char* mqtt_server = "120.102.36.38"; // 可換成你的MQTT roker
+const char* ota_url = "https://raw.githubusercontent.com/liyhui8140/114VR-51231132-YLHui/main/ota.bin"; // OTA 檔案路徑
 const char* client_id = "ESP32_OTA_Client";
 
 // ==================== MQTT 與網路 ====================
